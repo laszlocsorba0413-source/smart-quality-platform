@@ -10,14 +10,14 @@ import pandas as pd
 from datetime import datetime
 import gradio as gr
 from google import genai
-from gtts import gTTS
+from gTTS import gTTS
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-# 1. API & Modell Beállítások (Render Környezeti Változó támogatással)
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6J3civYgAMH2kO-YftB20z8iYD-YWdqM15ZBCBIwmBFeA")
+# 1. API & Modell Beállítások (Render Környezeti Változó használatával)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 MODELS_TO_TRY = ["gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"]

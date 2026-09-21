@@ -10,13 +10,14 @@ import pandas as pd
 from datetime import datetime
 import gradio as gr
 from google import genai
-from gTTS import gTTS
+from gtts import gTTS
+from PIL import Image
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-# 1. API & Modell Beállítások (Render Környezeti Változó használatával)
+# 1. API & Modell Beállítások
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -92,12 +93,12 @@ def fetch_live_email_gradio(user, pwd, server):
     except Exception as e:
         return f"❌ IMAP Csatlakozási hiba: {e}"
 
-def generate_with_fallback(prompt):
+def generate_with_fallback(contents):
     last_err = None
     for model_name in MODELS_TO_TRY:
         for attempt in range(2):
             try:
-                res = client.models.generate_content(model=model_name, contents=[prompt])
+                res = client.models.generate_content(model=model_name, contents=contents)
                 if res and res.text:
                     return res.text
             except Exception as e:
@@ -112,7 +113,9 @@ def create_pdf(res_tags, res1, res2, res3, res4, filename="Reklamacios_Jegyzokon
     title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0369a1'))
     heading_style = ParagraphStyle('HeadingStyle', parent=styles['Heading2'], fontSize=11, textColor=colors.HexColor('#0f172a'))
     body_style = ParagraphStyle('BodyStyle', parent=styles['Normal'], fontSize=9, leading=13, textColor=colors.HexColor('#334155'))
-    footer_style = ParagraphStyle('FooterStyle', parent=styles['Italic'], fontSize=8, textColor=colors.HexColor('#64748b'), spaceBefore=15)
+    footer_style = ParagraphStyle('FooterStyle', parent=styles['Italic'], fontSize=8, textColor=colors.HexColor('#0369a1'), spaceBefore=15)
+
+    app_url = "https://smart-quality-platform.onrender.com"
 
     story = [
         Paragraph("<b>MINŐSÉGÜGYI REKLAMÁCIÓS JEGYZŐKÖNYV (AI-AUDITED)</b>", title_style),
@@ -131,7 +134,7 @@ def create_pdf(res_tags, res1, res2, res3, res4, filename="Reklamacios_Jegyzokon
         Paragraph("<b>4. Hivatalos Válaszlevél</b>", heading_style),
         Paragraph(res4.replace('\n', '<br/>'), body_style),
         HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#cbd5e1'), spaceBefore=15, spaceAfter=5),
-        Paragraph("<i>Fejlesztette és tervezte: Csorba László • Smart Quality Decision Platform</i>", footer_style)
+        Paragraph(f"<i>Fejlesztette és tervezte: Csorba László • <a href='{app_url}'><u>Smart Quality Decision Platform megnyitása</u></a></i>", footer_style)
     ]
     doc.build(story)
     return filename
@@ -156,14 +159,16 @@ def append_to_database(res_tags, res1, res3, anger_level, target_dept):
     except:
         return "REC-2026-NEW"
 
-def process_complaint_gradio(panasz_szoveg, valasz_nyelv_disp):
-    if not panasz_szoveg.strip():
-        return "⚠️ Adj meg panaszszöveget!", "N/A", "", "", "", "", "", "Nincs továbbítandó adat", None, None
+def process_complaint_gradio(panasz_szoveg, input_image, valasz_nyelv_disp):
+    if not panasz_szoveg.strip() and input_image is None:
+        return "⚠️ Adj meg panaszszöveget vagy tölts fel/fotózz egy képet!", "N/A", "", "", "", "", "", "Nincs továbbítandó adat", None, None
 
     lang_code, target_lang_name = LANG_NAME_MAP.get(valasz_nyelv_disp, ('hu', 'HUNGARIAN'))
 
     master_prompt = f"""
-    Elemezd az alábbi vevői reklamációt: "{panasz_szoveg}"
+    Elemezd az alábbi vevői reklamációt (amely származhat írott szövegből vagy csatolt dokumentum/termék képéből):
+    Mérlegeld a szöveges és/vagy vizuális információkat.
+    
     Válaszolj PONTOSAN az alábbi 5 elválasztott blokkban:
     ---TRIAGE---
     KATEGÓRIA: [Logisztika / Csomagolás / Pénzügy / Termékminőség] | PRIORITÁS: [HIGH / MEDIUM / LOW] | CÍMKÉK: [#tag1, #tag2]
@@ -186,7 +191,14 @@ def process_complaint_gradio(panasz_szoveg, valasz_nyelv_disp):
     Write the official customer email response strictly in {target_lang_name} language (Max 100 words, polite, professional).
     """
 
-    res = generate_with_fallback(master_prompt)
+    contents = []
+    if panasz_szoveg.strip():
+        contents.append(f"Szöveges bemenet: {panasz_szoveg}\n")
+    if input_image is not None:
+        contents.append(input_image)
+    contents.append(master_prompt)
+
+    res = generate_with_fallback(contents)
 
     res_tags = res.split("---TRIAGE---")[1].split("---STEP1---")[0].strip() if "---TRIAGE---" in res else "Triázs lefutott"
     res1 = res.split("---STEP1---")[1].split("---STEP2---")[0].strip() if "---STEP1---" in res else res
@@ -244,7 +256,9 @@ def reset_to_home():
         "Saját E-mail Bemásolása",
         gr.update(visible=False),
         gr.update(visible=False),
+        gr.update(visible=False),
         "",
+        None,
         'Magyar 🇭🇺',
         "", "", "", "", "", "", "", "", None, None
     )
@@ -275,7 +289,7 @@ with gr.Blocks(title="Smart Quality Platform - Csorba László", theme=custom_th
             with gr.Column(scale=5):
                 gr.Markdown("### 📥 1. Panasz Bevitele & Forrás")
                 source_radio = gr.Radio(
-                    choices=["Saját E-mail Bemásolása", "Minta E-mail (Demó)", "Élő E-mail Importálása (IMAP)"],
+                    choices=["Saját E-mail Bemásolása", "📷 Fotó / Képernyőkép (Kamera)", "Minta E-mail (Demó)", "Élő E-mail Importálása (IMAP)"],
                     value="Saját E-mail Bemásolása",
                     label="Forrás kiválasztása"
                 )
@@ -291,10 +305,18 @@ with gr.Blocks(title="Smart Quality Platform - Csorba László", theme=custom_th
                     imap_server = gr.Textbox(value="imap.gmail.com", label="IMAP Szerver")
                     fetch_btn = gr.Button("📥 Új Beérkező E-mail Betöltése", variant="secondary")
 
+                image_box = gr.Group(visible=False)
+                with image_box:
+                    image_input = gr.Image(
+                        type="pil", 
+                        label="📷 Kép feltöltése vagy Fotó készítése (Kamera)", 
+                        sources=["upload", "webcam", "clipboard"]
+                    )
+
                 input_text = gr.Textbox(
-                    lines=7,
-                    label="📝 Reklamációs Szöveg",
-                    placeholder="Másold ide a beérkező e-mailt vagy panaszszöveget...",
+                    lines=6,
+                    label="📝 Reklamációs Szöveg (Opcionális kép mellé)",
+                    placeholder="Másold ide a panaszszöveget, vagy fotózd be a levelet/dokumentumot...",
                     value=""
                 )
                 lang_select = gr.Dropdown(choices=list(LANG_NAME_MAP.keys()), value='Magyar 🇭🇺', label="🌐 Vevői Válasznyelv Kiválasztása")
@@ -323,26 +345,28 @@ with gr.Blocks(title="Smart Quality Platform - Csorba László", theme=custom_th
 
         def toggle_source(source):
             if source == "Élő E-mail Importálása (IMAP)":
-                return gr.update(visible=False), gr.update(visible=True), gr.update(value="")
+                return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False), gr.update(value="")
             elif source == "Minta E-mail (Demó)":
-                return gr.update(visible=True), gr.update(visible=False), gr.update(value=SAMPLE_EMAILS["1. Indulatos Magyar Panasz (Sérült doboz)"])
+                return gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), gr.update(value=SAMPLE_EMAILS["1. Indulatos Magyar Panasz (Sérült doboz)"])
+            elif source == "📷 Fotó / Képernyőkép (Kamera)":
+                return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), gr.update(value="")
             else:
-                return gr.update(visible=False), gr.update(visible=False), gr.update(value="")
+                return gr.update(visible=False), gr.update(visible=False), gr.update(visible=False), gr.update(value="")
 
-        source_radio.change(toggle_source, inputs=[source_radio], outputs=[sample_box, imap_box, input_text])
+        source_radio.change(toggle_source, inputs=[source_radio], outputs=[sample_box, imap_box, image_box, input_text])
         sample_select.change(lambda choice: SAMPLE_EMAILS.get(choice, ""), inputs=[sample_select], outputs=[input_text])
         fetch_btn.click(fetch_live_email_gradio, inputs=[imap_user, imap_pass, imap_server], outputs=[input_text])
 
         submit_btn.click(
             process_complaint_gradio,
-            inputs=[input_text, lang_select],
+            inputs=[input_text, image_input, lang_select],
             outputs=[out_triage, out_anger, out_step1, out_step2, out_step3, out_step4, out_internal_msg, out_dept_status, out_audio, out_pdf]
         )
 
         home_btn.click(
             reset_to_home,
             outputs=[
-                source_radio, sample_box, imap_box, input_text, lang_select,
+                source_radio, sample_box, imap_box, image_box, input_text, image_input, lang_select,
                 out_triage, out_anger, out_step1, out_step2, out_step3, out_step4,
                 out_internal_msg, out_dept_status, out_audio, out_pdf
             ]

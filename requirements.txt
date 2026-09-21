@@ -1,0 +1,6 @@
+gradio
+google-genai
+gTTS
+reportlab
+pandas
+openpyxl

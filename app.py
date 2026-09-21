@@ -1,11 +1,6 @@
-# @title 🛡️ Smart Quality Decision Platform - Developed by Csorba László { display-mode: "form" }
 # ==============================================================================
-# ENTERPRISE QUALITY ASSISTANT - DEVELOPED BY CSORBA LÁSZLÓ
+# SMART QUALITY DECISION PLATFORM - DEVELOPED BY CSORBA LÁSZLÓ
 # ==============================================================================
-
-# 1. Csomagok telepítése
-!pip install -q --no-deps gradio
-!pip install -q google-genai gTTS reportlab pandas openpyxl
 
 import os
 import time
@@ -21,8 +16,8 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-# 2. API & Modell Beállítások
-GEMINI_API_KEY = "AQ.Ab8RN6J3civYgAMH2kO-YftB20z8iYD-YWdqM15ZBCBIwmBFeA"
+# 1. API & Modell Beállítások (Render Környezeti Változó támogatással)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AQ.Ab8RN6J3civYgAMH2kO-YftB20z8iYD-YWdqM15ZBCBIwmBFeA")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 MODELS_TO_TRY = ["gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash"]
@@ -244,7 +239,6 @@ def get_analytics_gradio():
     high = len(df[df['Prioritás'] == 'HIGH'])
     return f"📊 ÖSSZES CASE: {total} db | 🚨 KRITIKUS (HIGH): {high} db", df
 
-# KEZDŐLAP VISSZAÁLLÍTÓ FUNKCIÓ (ELSŐDLEGES: SAJÁT E-MAIL BEMÁSOLÁSA)
 def reset_to_home():
     return (
         "Saját E-mail Bemásolása",
@@ -332,7 +326,7 @@ with gr.Blocks(title="Smart Quality Platform - Csorba László", theme=custom_th
                 return gr.update(visible=False), gr.update(visible=True), gr.update(value="")
             elif source == "Minta E-mail (Demó)":
                 return gr.update(visible=True), gr.update(visible=False), gr.update(value=SAMPLE_EMAILS["1. Indulatos Magyar Panasz (Sérült doboz)"])
-            else: # Saját E-mail Bemásolása
+            else:
                 return gr.update(visible=False), gr.update(visible=False), gr.update(value="")
 
         source_radio.change(toggle_source, inputs=[source_radio], outputs=[sample_box, imap_box, input_text])
@@ -360,4 +354,7 @@ with gr.Blocks(title="Smart Quality Platform - Csorba László", theme=custom_th
         out_table = gr.Dataframe(label="📋 Rögzített Reklamációk Adatbázisa (Címzett Osztállyal)")
         refresh_btn.click(get_analytics_gradio, outputs=[out_summary, out_table])
 
-demo.launch()
+# 3. ÉLES FELHŐS INDÍTÁS (RENDER PORTBEÁLLÍTÁSSAL)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 7860))
+    demo.launch(server_name="0.0.0.0", server_port=port)

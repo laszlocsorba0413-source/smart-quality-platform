@@ -17,7 +17,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-# 1. API & Modell Beállítások
+# 1. API & Modell Beállítások (Render Környezeti Változó használatával)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -310,7 +310,8 @@ with gr.Blocks(title="Smart Quality Platform - Csorba László", theme=custom_th
                     image_input = gr.Image(
                         type="pil", 
                         label="📷 Kép feltöltése vagy Fotó készítése (Kamera)", 
-                        sources=["upload", "webcam", "clipboard"]
+                        sources=["upload", "webcam", "clipboard"],
+                        mirror_webcam=False
                     )
 
                 input_text = gr.Textbox(
